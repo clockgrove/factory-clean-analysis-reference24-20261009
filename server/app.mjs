@@ -95,6 +95,33 @@ function csvCell(value) {
   return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
+function overview(rows) {
+  const services = new Map();
+  for (const row of rows) {
+    if (!services.has(row.service)) services.set(row.service, {
+      service: row.service, incidentCount: 0, unresolvedCount: 0,
+      highSeverityCount: 0, resolutionMilliseconds: 0, resolvedCount: 0,
+    });
+    const service = services.get(row.service);
+    service.incidentCount++;
+    if (row.status !== 'resolved') service.unresolvedCount++;
+    if (['critical', 'high'].includes(row.severity)) service.highSeverityCount++;
+    if (row.status === 'resolved') {
+      service.resolvedCount++;
+      service.resolutionMilliseconds += Date.parse(row.resolvedAt) - Date.parse(row.openedAt);
+    }
+  }
+  return {
+    total: rows.length,
+    services: [...services.values()]
+      .sort((a, b) => b.unresolvedCount - a.unresolvedCount || compare(a.service, b.service))
+      .map(({ resolutionMilliseconds, resolvedCount, ...service }) => ({
+        ...service,
+        averageResolutionHours: resolvedCount ? resolutionMilliseconds / resolvedCount / 3600000 : null,
+      })),
+  };
+}
+
 function json(response, status, body) {
   response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   response.end(JSON.stringify(body));
@@ -125,10 +152,11 @@ export async function createAppServer() {
         return json(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'Use GET for this read-only server' } });
       }
       const url = new URL(request.url, 'http://127.0.0.1');
-      if (url.pathname === '/api/incidents' || url.pathname === '/api/export.csv') {
+      if (['/api/incidents', '/api/export.csv', '/api/overview'].includes(url.pathname)) {
         const exporting = url.pathname === '/api/export.csv';
         const query = parseQuery(url.searchParams, exporting);
         const matches = matching(rows, query);
+        if (url.pathname === '/api/overview') return json(response, 200, overview(matches));
         if (exporting) {
           response.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="incidents.csv"', 'Cache-Control': 'no-store' });
           return response.end([fields.join(','), ...matches.map(row => fields.map(key => csvCell(row[key])).join(','))].join('\r\n') + '\r\n');

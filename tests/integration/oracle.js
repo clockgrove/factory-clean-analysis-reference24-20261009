@@ -19,6 +19,23 @@ export function expected(options = {}) {
   return {items, summary: {total: items.length, unresolved: items.filter(x => x.status !== 'resolved').length, highSeverity: items.filter(x => ranks[x.severity] >= 3).length, openedByDay: [...counts].sort().map(([date, count]) => ({date, count}))}};
 }
 export const csvRows = items => [fields, ...items.map(row => fields.map(key => row[key] === null ? '' : Array.isArray(row[key]) ? JSON.stringify(row[key]) : String(row[key])))];
+export function expectedOverview(options = {}) {
+  const {items} = expected(options);
+  const services = [...new Set(items.map(row => row.service))].map(service => {
+    const incidents = items.filter(row => row.service === service);
+    const resolved = incidents.filter(row => row.status === 'resolved');
+    const elapsed = resolved.map(row => new Date(row.resolvedAt).getTime() - new Date(row.openedAt).getTime());
+    return {
+      service,
+      incidentCount: incidents.length,
+      unresolvedCount: incidents.filter(row => ['open', 'in_progress'].includes(row.status)).length,
+      highSeverityCount: incidents.filter(row => row.severity === 'critical' || row.severity === 'high').length,
+      averageResolutionHours: resolved.length ? elapsed.reduce((sum, duration) => sum + duration, 0) / resolved.length / 3600000 : null,
+    };
+  });
+  services.sort((a, b) => b.unresolvedCount - a.unresolvedCount || a.service.localeCompare(b.service));
+  return {total: items.length, services};
+}
 export function parseCSV(text) {
   const result = []; let row = [], cell = '', quoted = false;
   for (let i = 0; i < text.length; i++) {

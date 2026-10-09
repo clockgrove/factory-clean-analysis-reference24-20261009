@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { spawn } from 'node:child_process';
 import { createAppServer } from '../../server/app.mjs';
-import { rows, expected, parseCSV, csvRows } from './oracle.js';
+import { rows, expected, expectedOverview, parseCSV, csvRows } from './oracle.js';
 
 function parameters(options) {
   const result = new URLSearchParams();
@@ -119,6 +119,65 @@ test('integration: canonical data through real HTTP, complete pages, summaries, 
       assert.ok(rows.some(row => /[",\n]/.test(row.description)));
       assert.ok(rows.some(row => row.resolvedAt === null));
     });
+  } finally {
+    await close(server);
+  }
+});
+
+test('integration: whole-result service overview through real HTTP', { timeout: 30000 }, async () => {
+  const server = await createAppServer();
+  try {
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening', { signal: AbortSignal.timeout(5000) });
+    assert.equal(server.address().address, '127.0.0.1');
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const overview = async (options = {}) => {
+      const response = await fetch(`${base}/api/overview?${parameters(options)}`, { signal: AbortSignal.timeout(5000) });
+      assert.equal(response.status, 200);
+      assert.match(response.headers.get('content-type'), /application\/json/);
+      const actual = await response.json();
+      assert.deepEqual(actual, expectedOverview(options));
+      return actual;
+    };
+    const all = await overview();
+    assert.equal(all.total, 2400);
+    assert.equal(all.services.length, 6);
+    assert.equal(all.services.reduce((sum, service) => sum + service.incidentCount, 0), all.total);
+    assert.ok(all.services.every(service => typeof service.averageResolutionHours === 'number' && service.averageResolutionHours > 0));
+
+    const filters = { q: 'incident', service: ['Accounts', 'Billing'], status: ['open', 'in_progress', 'resolved'], severity: ['critical', 'high'], from: '2026-04-15', to: '2026-06-13' };
+    const filtered = await overview(filters);
+    assert.ok(filtered.total > 50, 'filtered result spans multiple pages at either page size');
+    for (const selection of [{}, filters]) {
+      const original = await overview(selection);
+      for (const sort of ['openedAt', 'severity']) {
+        for (const direction of ['asc', 'desc']) {
+          for (const pageSize of [25, 50]) {
+            for (const page of [1, 2, 99999]) {
+              assert.deepEqual(await overview({ ...selection, sort, direction, pageSize, page }), original);
+            }
+          }
+        }
+      }
+    }
+    const unresolved = await overview({ status: ['open', 'in_progress'] });
+    assert.ok(unresolved.services.length > 0);
+    assert.ok(unresolved.services.every(service => service.averageResolutionHours === null && service.unresolvedCount === service.incidentCount));
+    const resolved = await overview({ status: ['resolved'] });
+    assert.ok(resolved.services.every(service => service.unresolvedCount === 0));
+    assert.deepEqual(resolved.services.map(service => service.service), [...resolved.services.map(service => service.service)].sort());
+    for (const service of all.services) {
+      assert.equal(service.averageResolutionHours, resolved.services.find(item => item.service === service.service).averageResolutionHours, 'unresolved incidents do not dilute the average');
+    }
+    for (const q of ['iNc-000001', 'SLOW RESPONSE', 'second LINE: <sample>', '"retry, then continue"', '.*']) await overview({ q });
+    await overview({ service: ['Accounts', 'Accounts', 'Billing'] });
+    for (const day of ['2026-04-01', '2026-06-29']) {
+      assert.ok((await overview({ from: day, to: day })).total > 0);
+    }
+    await overview({ from: '2026-06-13' });
+    await overview({ to: '2026-04-15' });
+    assert.deepEqual(await overview({ q: 'no incident matches this', page: 42 }), { total: 0, services: [] });
+    assert.deepEqual(await overview({ from: '2027-01-01' }), { total: 0, services: [] });
   } finally {
     await close(server);
   }
