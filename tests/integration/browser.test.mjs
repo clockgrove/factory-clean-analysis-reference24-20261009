@@ -218,6 +218,38 @@ test('real Chromium: correctness, persisted views, keyboard, phone and overlappi
       await page.locator('#rows button').first().click(); await detail(expected({service: ['Search']}).items[0]); await page.getByRole('button', {name: 'Close details'}).click(); await check({service: ['Search']});
       await page.setViewportSize({width: 1280, height: 900});
     });
+    await t.test('personal triage persists literal notes, keeps editor focus, and restores actual opener on phones', async () => {
+      await clear(); await check();
+      const row = expected({}).items[0];
+      await page.locator('#rows button').first().click(); await detail(row);
+      await page.getByRole('button', {name: 'Add to personal triage', exact: true}).click();
+      await page.getByRole('button', {name: 'Add to personal triage', exact: true}).click();
+      await page.keyboard.press('Escape');
+      await expect(page.locator('#triage-list textarea')).toHaveCount(1);
+      const note = '<b>Investigate & retry</b> "literal"';
+      const editor = page.getByLabel(`Personal note for ${row.id}`);
+      await editor.fill(note);
+      await editor.evaluate(x => { x.focus(); x.setSelectionRange(3, 9); });
+      // Apply another request without moving focus; its completion must retain the editor.
+      await page.evaluate(() => { const select = document.querySelector('#direction'); select.value = 'asc'; select.dispatchEvent(new Event('change')); });
+      await check({direction: 'asc'});
+      await expect(editor).toBeFocused();
+      assert.deepEqual(await editor.evaluate(x => [x.selectionStart, x.selectionEnd]), [3, 9]);
+      await page.evaluate(() => { const select = document.querySelector('#direction'); select.value = 'desc'; select.dispatchEvent(new Event('change')); });
+      await check();
+      await page.reload(); await check();
+      await expect(page.getByLabel(`Personal note for ${row.id}`)).toHaveValue(note);
+      await page.setViewportSize({width: 375, height: 812});
+      const opener = page.getByRole('button', {name: `Open triage incident ${row.id}`, exact: true});
+      const address = page.url(), length = await page.evaluate(() => history.length);
+      await opener.focus(); await opener.press('Enter'); await detail(row);
+      await page.keyboard.press('Escape'); await expect(opener).toBeFocused();
+      assert.equal(page.url(), address); assert.equal(await page.evaluate(() => history.length), length);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+      await page.getByRole('button', {name: `Remove ${row.id} from triage`, exact: true}).click();
+      await page.reload(); await check(); await expect(page.locator('#triage-list textarea')).toHaveCount(0);
+      await page.setViewportSize({width: 1280, height: 900});
+    });
     await t.test('pending intent replacement, detail close/reselection, empty and genuine failure/retry', async () => {
       await clear(); await check(); await throttle(900);
       const previousSummary = await page.locator('#summary').textContent();
