@@ -23,12 +23,14 @@
         <button id="clear" type="button" class="secondary">Clear search and filters</button>
       </form>
       <section class="saved" aria-labelledby="saved-title"><h2 id="saved-title">Saved views</h2><form id="save-form"><label for="view-name">Name this view</label><input id="view-name" maxlength="80" required placeholder="e.g. Billing follow-up"><button type="submit" class="secondary">Save current view</button></form><p id="storage-message" role="status"></p><ul id="views"></ul></section>
+      <section class="triage" aria-labelledby="triage-title"><h2 id="triage-title">Personal triage</h2><p class="muted">Your investigation list and plain-text notes stay in this browser, separate from searches.</p><p id="triage-message" role="status"></p><ul id="triage-list"></ul></section>
     </aside>
     <section id="results" tabindex="-1" aria-labelledby="result-title">
       <div class="section-heading"><div><p class="eyebrow">All matching incidents</p><h2 id="result-title">Results overview</h2></div><span id="freshness" class="muted"></span></div>
       <div id="active-filters" class="chips" aria-label="Active selections"></div>
       <div id="summary" class="summary"></div>
       <section class="chart" aria-labelledby="chart-title"><h3 id="chart-title">Opened by day · UTC</h3><p class="muted">Counts cover the entire matching result.</p><div id="chart-bars" aria-hidden="true"></div><details><summary>Read daily counts</summary><p id="chart-text"></p></details></section>
+      <section id="service-overview" aria-labelledby="overview-title"><h3 id="overview-title">Service attention · all matching incidents</h3><p class="muted">Unresolved means open or in progress. High severity includes critical and high. Average resolution measures elapsed hours for resolved incidents only; unavailable means none were resolved.</p><p id="overview-selection" class="muted"></p><div id="overview-message" class="operation-message"></div><div id="service-measures"></div></section>
       <div class="table-controls"><div><label for="sort">Sort by</label><select id="sort"><option value="openedAt">Opened date</option><option value="severity">Severity</option></select></div><div><label for="direction">Order</label><select id="direction"><option value="desc">Newest / highest first</option><option value="asc">Oldest / lowest first</option></select></div><div><label for="page-size">Rows per page</label><select id="page-size"><option value="25">25</option><option value="50">50</option></select></div></div>
       <div id="result-message" class="operation-message"></div>
       <div class="table-wrap"><table><caption class="sr-only">Matching incidents. Open an incident for complete details.</caption><thead><tr><th scope="col">Incident</th><th scope="col">Service</th><th scope="col">Severity</th><th scope="col">Status</th><th scope="col">Opened · UTC</th></tr></thead><tbody id="rows"></tbody></table></div>
@@ -36,7 +38,7 @@
       <div id="export-message" class="operation-message"></div>
     </section>
   </main>
-  <dialog id="detail" aria-labelledby="detail-title"><div class="detail-heading"><h2 id="detail-title">Incident details</h2><button id="close-detail" class="secondary" type="button">Close details</button></div><div id="detail-content"></div></dialog>
+  <dialog id="detail" aria-labelledby="detail-title"><div class="detail-heading"><h2 id="detail-title">Incident details</h2><button id="close-detail" class="secondary" type="button">Close details</button></div><div id="detail-content"></div><button id="add-triage" type="button" disabled>Add to personal triage</button><p id="detail-triage-message" role="status"></p></dialog>
   <p id="announcement" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
   <footer>Fictional incidents. Dates and times are shown in UTC. Saved views stay in this browser.</footer>
 </body>

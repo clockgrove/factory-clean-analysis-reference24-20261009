@@ -71,3 +71,25 @@ test('address navigation supersedes all writers, failure and late cleanup; retry
   assert.equal(state.intent.page, 1); assert.deepEqual(state.result.data.summary, expected({q: 'Search'}).summary);
   assert.equal(state.result.intent, state.intent);
 });
+
+test('overview and personal triage stay independent through detail removal, replacement and late writers', async () => {
+  const {createTriage} = await import('../../public/triage.js');
+  const triage = createTriage({getItem: () => null, setItem() { throw new Error('unavailable'); }});
+  let state = send(createState(), 'detail:select', {id: rows[0].id});
+  state = send(state, 'detail:start'); const old = state.detail.token;
+  state = send(state, 'detail:success', {token: old, data: rows[0]});
+  triage.add(state.detail.data); triage.edit(rows[0].id, '<literal> note');
+  state = send(state, 'overview:start'); const overview = state.overviewOp.token;
+  state = send(state, 'detail:close');
+  triage.remove(rows[0].id);
+  state = send(state, 'detail:select', {id: rows[1].id}); state = send(state, 'detail:start');
+  for (const type of ['detail:success', 'detail:failure', 'detail:finish']) assert.equal(send(state, type, {token: old, data: rows[0], error: 'obsolete'}), state);
+  state = send(state, 'overview:failure', {token: overview, error: 'current service failure'});
+  assert.equal(announcement(state), 'Loading incident details.');
+  assert.deepEqual(triage.entries, []);
+  state = send(state, 'detail:success', {token: state.detail.token, data: rows[1]});
+  triage.add(state.detail.data);
+  assert.deepEqual(triage.entries.map(entry => entry.id), [rows[1].id]);
+  assert.equal(triage.entries[0].note, '');
+  assert.match(triage.message, /only for this visit/);
+});
