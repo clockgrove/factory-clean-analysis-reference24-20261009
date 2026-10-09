@@ -164,6 +164,9 @@ test('canonical incidents through real loopback HTTP', async t => {
         const body = await response.json();
         assert.equal(body.error.code, 'INVALID_QUERY');
         assert.ok(body.error.message.length);
+        const overview = await fetch(`${base}/api/overview?${params}`, { signal: AbortSignal.timeout(5000) });
+        assert.equal(overview.status, 400, params);
+        assert.deepEqual(await overview.json(), body);
       }
       const invalidExport = await fetch(`${base}/api/export.csv?severity=urgent`);
       assert.equal(invalidExport.status, 400);
